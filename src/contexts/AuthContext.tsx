@@ -21,7 +21,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshUserProfile = async () => {
+  const refreshUserProfile = async (sessionUser?: any) => {
     if (!isSupabaseConfigured) {
       setCurrentUser(null);
       return;
@@ -31,52 +31,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const user = await api.getUser();
       if (user) {
         setCurrentUser(user);
-      } else {
-        // If getUser returns null, try to create fallback from session
-        try {
-          const { data: sessionData } = await api.getSession();
-          if (sessionData?.session?.user) {
-            const fallbackUser: UserProfile = {
-              ...sessionData.session.user,
-              username: sessionData.session.user.email?.split('@')[0] || 'New User',
-              mobile: null,
-              current_streak: 0,
-              last_streak_updated: null,
-              email_notifications_enabled: true,
-              timezone: null,
-            };
-            setCurrentUser(fallbackUser);
-          } else {
-            setCurrentUser(null);
-          }
-        } catch (sessionError) {
-          console.error("Failed to get session for fallback user:", sessionError);
-          setCurrentUser(null);
-        }
+        return;
       }
     } catch (error) {
-      console.error("Failed to refresh user profile:", error);
-      // Last resort: try to create minimal user from session
+      console.error("Error in getUser:", error);
+    }
+    
+    // If getUser failed or returned null, create fallback from session
+    // Use provided sessionUser or fetch from session
+    let userToUse = sessionUser;
+    
+    if (!userToUse) {
       try {
         const { data: sessionData } = await api.getSession();
-        if (sessionData?.session?.user) {
-          const fallbackUser: UserProfile = {
-            ...sessionData.session.user,
-            username: sessionData.session.user.email?.split('@')[0] || 'New User',
-            mobile: null,
-            current_streak: 0,
-            last_streak_updated: null,
-            email_notifications_enabled: true,
-            timezone: null,
-          };
-          setCurrentUser(fallbackUser);
-        } else {
-          setCurrentUser(null);
-        }
-      } catch (fallbackError) {
-        console.error("Failed to create fallback user:", fallbackError);
-        setCurrentUser(null);
+        userToUse = sessionData?.session?.user;
+      } catch (sessionError) {
+        console.error("Failed to get session:", sessionError);
       }
+    }
+    
+    if (userToUse) {
+      const fallbackUser: UserProfile = {
+        ...userToUse,
+        username: userToUse.email?.split('@')[0] || userToUse.user_metadata?.username || 'New User',
+        mobile: userToUse.user_metadata?.mobile || null,
+        current_streak: 0,
+        last_streak_updated: null,
+        email_notifications_enabled: true,
+        timezone: userToUse.user_metadata?.timezone || null,
+      };
+      setCurrentUser(fallbackUser);
+    } else {
+      setCurrentUser(null);
     }
   };
 
@@ -95,15 +81,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       setSession(session);
       
-      if (session) {
-        try {
-          await refreshUserProfile();
-        } catch (error) {
-          console.error("Error refreshing user profile:", error);
-          if (mounted) {
-            setCurrentUser(null);
-          }
-        }
+      if (session && session.user) {
+        // Always ensure a user is set when session exists to prevent redirect loops
+        await refreshUserProfile(session.user);
       } else {
         setCurrentUser(null);
       }
@@ -130,13 +110,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setLoading(true);
         }
         await handleSessionAndUser(session);
-        if (mounted && initialLoadComplete) {
+        // Always set loading to false after handling SIGNED_IN/TOKEN_REFRESHED
+        if (mounted) {
           setLoading(false);
+          if (!initialLoadComplete) {
+            initialLoadComplete = true;
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setSession(null);
         setLoading(false);
+        if (!initialLoadComplete) {
+          initialLoadComplete = true;
+        }
       }
     });
 
