@@ -64,7 +64,7 @@ const Sidebar: React.FC<{ isOpen: boolean; toggle: () => void }> = ({ isOpen, to
   );
 };
 
-const Header: React.FC<{ toggleSidebar: () => void }> = () => {
+const Header: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
   const { currentUser } = useAuth();
   return (
     <header className="bg-bg-secondary/50 backdrop-blur-md h-16 flex items-center justify-between lg:justify-end px-6 border-b border-border-color sticky top-0 z-20">
