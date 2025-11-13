@@ -69,7 +69,11 @@ Deno.serve(async (req) => {
     const emailResults = [];
     for (const task of tasksToNotify) {
       if (task.email && task.username) {
-        const { subject, html } = getEmailContent(task.name, task.username, task.notification_type);
+        // Ensure notification_type is either 'start' or 'end'
+        const notificationType = (task.notification_type === 'start' || task.notification_type === 'end') 
+          ? task.notification_type 
+          : 'start'; // Default to 'start' if invalid
+        const { subject, html } = getEmailContent(task.name, task.username, notificationType);
 
         const emailPayload = {
             from: RESEND_FROM_EMAIL,

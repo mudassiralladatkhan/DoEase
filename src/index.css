@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans bg-bg-primary text-text-primary antialiased;
+  }
+  .glass-pane {
+    @apply bg-glass-bg backdrop-blur-lg border border-border-color rounded-xl;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply w-full py-3 px-6 border-none rounded-md text-base font-semibold cursor-pointer transition-all duration-300 inline-flex items-center justify-center gap-2 no-underline disabled:opacity-60 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply bg-primary text-white hover:bg-primary-dark shadow-glow-primary;
+  }
+  .btn-secondary {
+    @apply bg-bg-secondary text-text-primary border border-border-color hover:bg-opacity-80;
+  }
+  .btn-danger {
+    @apply bg-danger text-white hover:bg-red-700;
+  }
+  .btn-small {
+    @apply py-2 px-4 text-sm w-auto;
+  }
+  .btn-large {
+    @apply py-4 px-8 text-lg;
+  }
+  .form-input {
+    @apply w-full py-3 px-4 border border-border-color rounded-md text-base transition-all duration-300 font-sans bg-glass-bg text-text-primary placeholder-text-secondary focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/[.15] focus:bg-bg-secondary;
+  }
+  .form-label {
+    @apply block mb-2 font-medium text-sm text-text-secondary;
+  }
+  .form-group {
+    @apply mb-5;
+  }
+  .icon-btn {
+    @apply p-2 bg-transparent border-none cursor-pointer rounded-full transition-all duration-300 text-text-secondary hover:bg-glass-bg hover:text-primary;
+  }
+}
