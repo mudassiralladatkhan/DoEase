@@ -114,13 +114,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
 
-    // Set up auth state change listener - this fires immediately with INITIAL_SESSION
+    // Fetch session immediately instead of waiting for INITIAL_SESSION
+    const initializeAuth = async () => {
+      if (!mounted || initialLoadComplete) return;
+      
+      try {
+        const { data: sessionData, error: sessionError } = await api.getSession();
+        if (!mounted || initialLoadComplete) return;
+        
+        if (sessionError) {
+          console.error("Session error:", sessionError);
+          if (mounted && !initialLoadComplete) {
+            setSession(null);
+            setCurrentUser(null);
+            setLoading(false);
+            initialLoadComplete = true;
+          }
+          return;
+        }
+        
+        await handleSessionAndUser(sessionData?.session || null);
+      } catch (error) {
+        console.error("Error in initial session fetch:", error);
+        if (mounted && !initialLoadComplete) {
+          setCurrentUser(null);
+          setSession(null);
+          setLoading(false);
+          initialLoadComplete = true;
+        }
+      }
+    };
+
+    // Start initialization immediately
+    initializeAuth();
+
+    // Set up auth state change listener for future changes
     const { data: authListener } = api.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      // Handle INITIAL_SESSION - this fires immediately when listener is set up
+      // Skip INITIAL_SESSION as we already handled it
       if (event === 'INITIAL_SESSION') {
-        await handleSessionAndUser(session);
+        // Only update if we haven't completed initial load yet
+        if (!initialLoadComplete) {
+          await handleSessionAndUser(session);
+        }
         return;
       }
 
@@ -151,38 +188,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       authListenerUnsubscribe = authListener.subscription.unsubscribe;
     }
 
-    // Fallback: if INITIAL_SESSION doesn't fire within 1 second, fetch manually
-    const timeoutId = setTimeout(async () => {
-      if (!mounted || initialLoadComplete) return;
-      
-      try {
-        const { data: sessionData, error: sessionError } = await api.getSession();
-        if (!mounted || initialLoadComplete) return;
-        
-        if (sessionError) {
-          console.error("Session error:", sessionError);
-          if (mounted && !initialLoadComplete) {
-            setSession(null);
-            setCurrentUser(null);
-            setLoading(false);
-            initialLoadComplete = true;
-          }
-          return;
-        }
-        
-        await handleSessionAndUser(sessionData?.session || null);
-      } catch (error) {
-        console.error("Error in fallback session fetch:", error);
-        if (mounted && !initialLoadComplete) {
-          setCurrentUser(null);
-          setSession(null);
-          setLoading(false);
-          initialLoadComplete = true;
-        }
-      }
-    }, 1000);
-
-    // Safety timeout: ensure loading is always set to false after 3 seconds max
+    // Safety timeout: ensure loading is always set to false after 2 seconds max
     const safetyTimeoutId = setTimeout(async () => {
       if (mounted && !initialLoadComplete) {
         console.warn("Loading timeout reached, forcing loading to false");
@@ -208,11 +214,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setLoading(false);
         initialLoadComplete = true;
       }
-    }, 3000);
+    }, 2000);
 
     return () => {
       mounted = false;
-      clearTimeout(timeoutId);
       clearTimeout(safetyTimeoutId);
       if (authListenerUnsubscribe) {
         authListenerUnsubscribe();
