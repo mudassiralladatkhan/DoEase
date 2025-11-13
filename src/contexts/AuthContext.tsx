@@ -81,16 +81,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       setSession(session);
       
-      if (session && session.user) {
-        // Always ensure a user is set when session exists to prevent redirect loops
-        await refreshUserProfile(session.user);
-      } else {
-        setCurrentUser(null);
-      }
-      
-      if (mounted && !initialLoadComplete) {
-        setLoading(false);
-        initialLoadComplete = true;
+      try {
+        if (session && session.user) {
+          // Always ensure a user is set when session exists to prevent redirect loops
+          await refreshUserProfile(session.user);
+        } else {
+          setCurrentUser(null);
+        }
+      } catch (error) {
+        console.error("Error in handleSessionAndUser:", error);
+        // Even on error, ensure we have a user if session exists
+        if (session && session.user) {
+          const fallbackUser: UserProfile = {
+            ...session.user,
+            username: session.user.email?.split('@')[0] || 'New User',
+            mobile: null,
+            current_streak: 0,
+            last_streak_updated: null,
+            email_notifications_enabled: true,
+            timezone: null,
+          };
+          setCurrentUser(fallbackUser);
+        } else {
+          setCurrentUser(null);
+        }
+      } finally {
+        // Always set loading to false and mark as complete
+        if (mounted && !initialLoadComplete) {
+          setLoading(false);
+          initialLoadComplete = true;
+        }
       }
     };
 
@@ -131,43 +151,64 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       authListenerUnsubscribe = authListener.subscription.unsubscribe;
     }
 
-    // Fallback: if INITIAL_SESSION doesn't fire within 2 seconds, fetch manually
+    // Fallback: if INITIAL_SESSION doesn't fire within 1 second, fetch manually
     const timeoutId = setTimeout(async () => {
       if (!mounted || initialLoadComplete) return;
       
       try {
         const { data: sessionData, error: sessionError } = await api.getSession();
-        if (!mounted) return;
+        if (!mounted || initialLoadComplete) return;
         
         if (sessionError) {
           console.error("Session error:", sessionError);
-          setSession(null);
-          setCurrentUser(null);
-          setLoading(false);
-          initialLoadComplete = true;
+          if (mounted && !initialLoadComplete) {
+            setSession(null);
+            setCurrentUser(null);
+            setLoading(false);
+            initialLoadComplete = true;
+          }
           return;
         }
         
         await handleSessionAndUser(sessionData?.session || null);
       } catch (error) {
         console.error("Error in fallback session fetch:", error);
-        if (mounted) {
+        if (mounted && !initialLoadComplete) {
           setCurrentUser(null);
           setSession(null);
           setLoading(false);
           initialLoadComplete = true;
         }
       }
-    }, 2000);
+    }, 1000);
 
-    // Safety timeout: ensure loading is always set to false after 5 seconds max
-    const safetyTimeoutId = setTimeout(() => {
+    // Safety timeout: ensure loading is always set to false after 3 seconds max
+    const safetyTimeoutId = setTimeout(async () => {
       if (mounted && !initialLoadComplete) {
         console.warn("Loading timeout reached, forcing loading to false");
+        // Try one last time to get session and set user
+        try {
+          const { data: sessionData } = await api.getSession();
+          if (sessionData?.session?.user) {
+            const fallbackUser: UserProfile = {
+              ...sessionData.session.user,
+              username: sessionData.session.user.email?.split('@')[0] || 'New User',
+              mobile: null,
+              current_streak: 0,
+              last_streak_updated: null,
+              email_notifications_enabled: true,
+              timezone: null,
+            };
+            setCurrentUser(fallbackUser);
+            setSession(sessionData.session);
+          }
+        } catch (error) {
+          console.error("Error in safety timeout:", error);
+        }
         setLoading(false);
         initialLoadComplete = true;
       }
-    }, 5000);
+    }, 3000);
 
     return () => {
       mounted = false;
